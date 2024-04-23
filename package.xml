@@ -1,6 +1,6 @@
 <?xml version="1.0"?>
 <package format="2">
-  <name>imu_preintegration</name>
+  <name>imu_fusion</name>
   <version>0.0.0</version>
   <description>The imu_preintegration package</description>
 
