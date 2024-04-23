@@ -1,0 +1,6 @@
+
+<launch>
+  <node pkg="imu_preintegration" type="imu_node" name="imu_preintegration_node" output="screen"/>
+  <!-- play ros bag -->
+  <node pkg="rosbag" type="play" name="rosbag_play" args="$(find imu_preintegration)/bag/indoor_20240420.bag"/>
+</launch>
