@@ -2,17 +2,18 @@
 #include <thread>
 #include <eigen3/Eigen/Dense>
 #include <ros/ros.h>
-using namespace imu_preintegration;
+using namespace imu_fusion;
 class IMUProcess
 {
 public:
     INTERFACE *interface_ptr;
     bool is_exit = false, is_init = false;
     double curr_time = -1, last_time = -1;
-    Eigen::Vector3d static_acc,static_gyro;
-    Eigen::Vector3d gravity;
+    IMUData imu;
+    OdomData odom;
+    Eigen::Vector3d linear_vel;
+    Eigen::Vector3d angular_vel;
     Eigen::Quaterniond R; // rotation
-    Eigen::Vector3d v;    // velocity
     Eigen::Vector3d p;    // position
 
     IMUProcess(int argc, char **argv)
@@ -20,71 +21,66 @@ public:
         INTERFACE interface = INTERFACE::GetInterface();
         interface.Init(argc, argv, "imu_process");
         interface_ptr = &interface;
-        // init variables
-        R.setIdentity();
-        v.setZero();
-        p.setZero();
-        gravity << 0, 0, 9.8;
+
         // start process thread
         std::thread process_thread(&IMUProcess::ProcessThread, this);
         process_thread.detach();
         ros::spin();
     }
-    
+
     void Init()
     {
-        // 假定前20次数据是静止的，使用这部分数据进行初始化
-        // calculate gravity
-        int i = 0,k = 0;
-        IMUData imu_data;
-        while (i < 100)
-        {
-            imu_data = interface_ptr->getData();
-            imu_data.Print();
-            if (imu_data.gyro.norm() < 0.01) {
-                static_acc += imu_data.acc;
-                k++;
-            } else {
-                ROS_WARN("gyro is not zero(%lf,%lf,%lf), skip this data", imu_data.gyro(0), imu_data.gyro(1), imu_data.gyro(2));
-            }
-            static_gyro += imu_data.gyro;
-            i++; 
-        }
-        static_acc/= k;
-        static_gyro/= i;
-        ROS_INFO("Average_static_status: %lf %lf %lf", static_acc(0), static_acc(1), static_acc(2));
-        ROS_INFO("Average_static_gyro: %lf %lf %lf", static_gyro(0), static_gyro(1), static_gyro(2));
-        ROS_INFO("Gravity: %lf %lf %lf", gravity(0), gravity(1), gravity(2));
-        // 初始化imu数据
+        ROS_INFO("Init");
+        odom = interface_ptr->get_odom_data();
+        curr_time = odom.time_stamp;
+        linear_vel = odom.linear_vel;
+        angular_vel = odom.angular_vel;
+        R = odom.orientation;
+        p = odom.pos;
+
         is_init = true;
-        // 更新时间
-        last_time = curr_time;
-        curr_time = imu_data.time_stamp;
     }
 
     void Update()
     {
-        //get data
-        IMUData data = interface_ptr->getData();
-       // 更新时间
+        // get data
+        while (odom.time_stamp < curr_time)
+        {
+            odom = interface_ptr->get_odom_data();
+        }
+        // ROS_INFO("odom time stamp: %f", odom.time_stamp);
+        while (imu.time_stamp < odom.time_stamp)
+        {
+            imu = interface_ptr->get_imu_data();
+        }
+        // ROS_INFO("imu time stamp: %f", imu.time_stamp);
         last_time = curr_time;
-        curr_time = data.time_stamp;
-        double dt = curr_time - last_time;
+        curr_time = imu.time_stamp;
+        angular_vel = imu.gyro;
+        linear_vel = odom.linear_vel;
+        R = imu.orientation;
+        p += R * linear_vel * (curr_time - last_time);
+
+        // publish odom
+
+        // ROS_INFO("odom time stamp: %f", odom.time_stamp);
+        // ROS_INFO("linear_vel: %f %f %f", odom.linear_vel.x(), odom.linear_vel.y(), odom.linear_vel.z());
+        // ROS_INFO("angular_vel: %f %f %f", odom.angular_vel.x(), odom.angular_vel.y(), odom.angular_vel.z());
+        // ROS_INFO("orientation: %f %f %f %f", odom.orientation.w(), odom.orientation.x(), odom.orientation.y(), odom.orientation.z());
+        ROS_INFO("curr_time: %f", curr_time);
     }
+
     void ProcessThread()
     {
-        while (!is_exit)// 循环读取imu数据
+        if (!is_init)
+            Init();
+        while (!is_exit) // 循环读取imu数据
         {
-            if (!is_init) // 第一次读取数据进行初始化
-                Init();
-            else
-                Update();
+            Update();
         }
     }
-    ~IMUProcess()
-    {
-        is_exit = true;
-    }
+
+    ~IMUProcess() { is_exit = true; }
 };
 
 int main(int argc, char **argv)

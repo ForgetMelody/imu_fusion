@@ -1,6 +1,8 @@
 
 <launch>
-  <node pkg="imu_preintegration" type="imu_node" name="imu_preintegration_node" output="screen"/>
+  <node pkg="imu_fusion" type="imu_node" name="imu_fusion_node" output="screen"/>
   <!-- play ros bag -->
-  <node pkg="rosbag" type="play" name="rosbag_play" args="$(find imu_preintegration)/bag/indoor_20240420.bag"/>
+  <node pkg="rosbag" type="play" name="rosbag_play" args="$(find imu_fusion)/bags/indoor_20240420.bag"/>
+  <!-- rviz -->
+  <node pkg="rviz" type="rviz" name="rviz1" args="-d $(find imu_fusion)/config/default.rviz"/>
 </launch>

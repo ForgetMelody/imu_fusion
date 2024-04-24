@@ -1,7 +1,7 @@
 #include "ros_interface/ros_interface.h"
 #include "ros/duration.h"
 
-namespace imu_preintegration
+namespace imu_fusion
 {
     void INTERFACE::Init(int argc, char *argv[], std::string KNodeName)
     {
@@ -16,6 +16,7 @@ namespace imu_preintegration
         nh_ptr_ = &nh;
         nh_local_ptr_ = &nh_local;
         imu_sub_ = nh.subscribe<sensor_msgs::Imu>("/IMU_data", 1000, boost::bind(&INTERFACE::imuCallback, this, _1));
+        odom_sub_ = nh.subscribe<nav_msgs::Odometry>("/odom", 1000, boost::bind(&INTERFACE::odomCallback, this, _1));
         odom_pub_ = nh.advertise<nav_msgs::Odometry>("/imu_odom", 1000);
 
         is_initialized_ = true;
@@ -32,12 +33,31 @@ namespace imu_preintegration
         // angular velocity
         imu_data.gyro << msg->angular_velocity.x, msg->angular_velocity.y, msg->angular_velocity.z;
         // orientation
-        imu_data.quat.x() = msg->orientation.x;
-        imu_data.quat.y() = msg->orientation.y;
-        imu_data.quat.z() = msg->orientation.z;
-        imu_data.quat.w() = msg->orientation.w;
+        imu_data.orientation.x() = msg->orientation.x;
+        imu_data.orientation.y() = msg->orientation.y;
+        imu_data.orientation.z() = msg->orientation.z;
+        imu_data.orientation.w() = msg->orientation.w;
 
         imu_data_list.push_back(imu_data);
+    }
+    void INTERFACE::odomCallback(const nav_msgs::Odometry::ConstPtr &msg)
+    {
+        OdomData odom_data;
+        // time stamp
+        odom_data.time_stamp = msg->header.stamp.toSec();
+        // pos
+        odom_data.pos << msg->pose.pose.position.x, msg->pose.pose.position.y, msg->pose.pose.position.z;
+        // orientation
+        odom_data.orientation.x() = msg->pose.pose.orientation.x;
+        odom_data.orientation.y() = msg->pose.pose.orientation.y;
+        odom_data.orientation.z() = msg->pose.pose.orientation.z;
+        odom_data.orientation.w() = msg->pose.pose.orientation.w;
+        // linear vel
+        odom_data.linear_vel << msg->twist.twist.linear.x, msg->twist.twist.linear.y, msg->twist.twist.linear.z; // z 一般为 0 (差速轮则x也为0)
+        // angular vel
+        odom_data.angular_vel << msg->twist.twist.angular.x, msg->twist.twist.angular.y, msg->twist.twist.angular.z; // x y 一般为0
+
+        odom_data_list.push_back(odom_data);
     }
 
     void INTERFACE::publish_odom()
@@ -46,15 +66,25 @@ namespace imu_preintegration
         odom_pub_.publish(odom_);
     }
 
-    IMUData INTERFACE::getData() {
+    IMUData INTERFACE::get_imu_data()
+    {
         while (imu_data_list.empty())
             ros::Duration(0.02).sleep();
         IMUData data = imu_data_list.front();
         imu_data_list.erase(imu_data_list.begin());
         return data;
     }
-    void IMUData::Print() {
-    std::cout <<"IMUDATA: time_stamp: " << time_stamp << " \n \tacc: " << acc.transpose() << " \n\tgyro: " << gyro.transpose() << " \n\tquat: " << quat.coeffs().transpose() << std::endl;
+    OdomData INTERFACE::get_odom_data()
+    {
+        while (odom_data_list.empty())
+            ros::Duration(0.02).sleep();
+        OdomData data = odom_data_list.front();
+        odom_data_list.erase(odom_data_list.begin());
+        return data;
+    }
+    void IMUData::Print()
+    {
+        std::cout << "IMUDATA: time_stamp: " << time_stamp << " \n \tacc: " << acc.transpose() << " \n\tgyro: " << gyro.transpose() << " \n\tquat: " << orientation.coeffs().transpose() << std::endl;
     }
 }
 // namespace imu_preintegration
