@@ -1,4 +1,6 @@
 #include "ros_interface/ros_interface.h"
+#include "geometry_msgs/PoseStamped.h"
+#include "nav_msgs/Path.h"
 #include "ros/duration.h"
 
 namespace imu_fusion
@@ -15,8 +17,12 @@ namespace imu_fusion
         ros::NodeHandle nh_local("~");
         nh_ptr_ = &nh;
         nh_local_ptr_ = &nh_local;
+        //subscriber
         imu_sub_ = nh.subscribe<sensor_msgs::Imu>("/IMU_data", 1000, boost::bind(&INTERFACE::imuCallback, this, _1));
         odom_sub_ = nh.subscribe<nav_msgs::Odometry>("/odom", 1000, boost::bind(&INTERFACE::odomCallback, this, _1));
+        //publisher
+        raw_path_pub_ = nh.advertise<nav_msgs::Path>("/raw_path", 1000);
+        filtered_path_pub_ = nh.advertise<nav_msgs::Path>("/filtered_path",1000);
         odom_pub_ = nh.advertise<nav_msgs::Odometry>("/imu_odom", 1000);
 
         is_initialized_ = true;
@@ -58,13 +64,17 @@ namespace imu_fusion
         odom_data.angular_vel << msg->twist.twist.angular.x, msg->twist.twist.angular.y, msg->twist.twist.angular.z; // x y 一般为0
 
         odom_data_list.push_back(odom_data);
+        // add to path
+        geometry_msgs::PoseStamped pose;
+        pose.pose = msg->pose.pose;
+        raw_path.header.stamp = msg->header.stamp;
+        raw_path.poses.push_back(pose);
+        
     }
 
-    void INTERFACE::publish_odom()
-    {
-        // Publish the odometry message
-        odom_pub_.publish(odom_);
-    }
+    void INTERFACE::publish_odom(){odom_pub_.publish(odom_);}
+    void INTERFACE::publish_raw_path(){raw_path_pub_.publish(raw_path);}
+    void INTERFACE::publish_fitten_path(){filtered_path_pub_.publish(fitten_path);}
 
     IMUData INTERFACE::get_imu_data()
     {
