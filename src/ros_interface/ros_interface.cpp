@@ -17,15 +17,19 @@ namespace imu_fusion
         ros::NodeHandle nh_local("~");
         nh_ptr_ = &nh;
         nh_local_ptr_ = &nh_local;
-        //subscriber
+        // subscriber
         imu_sub_ = nh.subscribe<sensor_msgs::Imu>("/IMU_data", 1000, boost::bind(&INTERFACE::imuCallback, this, _1));
         odom_sub_ = nh.subscribe<nav_msgs::Odometry>("/odom", 1000, boost::bind(&INTERFACE::odomCallback, this, _1));
-        //publisher
+        // publisher
         raw_path_pub_ = nh.advertise<nav_msgs::Path>("/raw_path", 1000);
-        filtered_path_pub_ = nh.advertise<nav_msgs::Path>("/filtered_path",1000);
+        filtered_path_pub_ = nh.advertise<nav_msgs::Path>("/filtered_path", 1000);
         odom_pub_ = nh.advertise<nav_msgs::Odometry>("/imu_odom", 1000);
 
         is_initialized_ = true;
+        // path msg init
+        raw_path_.header.frame_id = "odom";
+        fitten_path_.header.frame_id = "odom";
+
         ROS_INFO("ROS interface initialize finished.");
     }
 
@@ -67,14 +71,13 @@ namespace imu_fusion
         // add to path
         geometry_msgs::PoseStamped pose;
         pose.pose = msg->pose.pose;
-        raw_path.header.stamp = msg->header.stamp;
-        raw_path.poses.push_back(pose);
-        
+        raw_path_.header.stamp = msg->header.stamp;
+        raw_path_.poses.push_back(pose);
     }
 
-    void INTERFACE::publish_odom(){odom_pub_.publish(odom_);}
-    void INTERFACE::publish_raw_path(){raw_path_pub_.publish(raw_path);}
-    void INTERFACE::publish_fitten_path(){filtered_path_pub_.publish(fitten_path);}
+    void INTERFACE::publish_odom() { odom_pub_.publish(odom_); }
+    void INTERFACE::publish_raw_path() { raw_path_pub_.publish(raw_path_); }
+    void INTERFACE::publish_fitten_path() { filtered_path_pub_.publish(fitten_path_); }
 
     IMUData INTERFACE::get_imu_data()
     {
@@ -95,6 +98,54 @@ namespace imu_fusion
     void IMUData::Print()
     {
         std::cout << "IMUDATA: time_stamp: " << time_stamp << " \n \tacc: " << acc.transpose() << " \n\tgyro: " << gyro.transpose() << " \n\tquat: " << orientation.coeffs().transpose() << std::endl;
+    }
+
+    void INTERFACE::set_odom(Eigen::Vector3d pos, Eigen::Quaterniond orientation, Eigen::Vector3d linear_vel, Eigen::Vector3d angular_val, std::string frame_id, double time_stamp)
+    {
+        odom_.header.frame_id = frame_id;
+        odom_.header.stamp = ros::Time(time_stamp);
+        // pos
+        odom_.pose.pose.position.x = pos.x();
+        odom_.pose.pose.position.y = pos.y();
+        odom_.pose.pose.position.z = pos.z();
+        // orientation
+        odom_.pose.pose.orientation.x = orientation.x();
+        odom_.pose.pose.orientation.y = orientation.y();
+        odom_.pose.pose.orientation.z = orientation.z();
+        odom_.pose.pose.orientation.w = orientation.w();
+        // val
+        odom_.twist.twist.linear.x = linear_vel.x();
+        odom_.twist.twist.linear.y = linear_vel.y();
+        odom_.twist.twist.linear.z = linear_vel.z();
+        odom_.twist.twist.angular.x = angular_val.x();
+        odom_.twist.twist.angular.y = angular_val.y();
+        odom_.twist.twist.angular.z = angular_val.z();
+    }
+    void INTERFACE::add_path_point(Eigen::Vector3d pos, Eigen::Quaterniond orientation, std::string frame_id, double time_stamp)
+    {
+        geometry_msgs::PoseStamped pose;
+        // pos
+        pose.pose.position.x = pos.x();
+        pose.pose.position.y = pos.y();
+        pose.pose.position.z = pos.z();
+        // orientation
+        pose.pose.orientation.x = orientation.x();
+        pose.pose.orientation.y = orientation.y();
+        pose.pose.orientation.z = orientation.z();
+        pose.pose.orientation.w = orientation.w();
+        // frame_id
+        pose.header.frame_id = frame_id;
+        // time_stamp
+        pose.header.stamp = ros::Time(time_stamp);
+        // add to path
+        fitten_path_.header.stamp = ros::Time(time_stamp);
+        fitten_path_.poses.push_back(pose);
+    }
+    void INTERFACE::publish_msg()
+    {
+        publish_odom();
+        publish_raw_path();
+        publish_fitten_path();
     }
 }
 // namespace imu_preintegration

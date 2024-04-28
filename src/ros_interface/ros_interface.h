@@ -40,34 +40,38 @@ namespace imu_fusion
     {
     private:
         INTERFACE() = default;
-        //nodehandle
+        // nodehandle
         ros::NodeHandle *nh_local_ptr_;
         ros::NodeHandle *nh_ptr_;
-        //subscriber
+        // subscriber
         ros::Subscriber imu_sub_;
         ros::Subscriber odom_sub_;
-        //publisher
+        // publisher
         ros::Publisher odom_pub_;
         ros::Publisher raw_path_pub_, filtered_path_pub_;
 
         bool is_initialized_ = false;
         void imuCallback(const sensor_msgs::Imu::ConstPtr &msg);
         void odomCallback(const nav_msgs::Odometry::ConstPtr &msg);
-
-    public:
-        std::vector<IMUData> imu_data_list;
-        std::vector<OdomData> odom_data_list;
         // publish msg
         nav_msgs::Odometry odom_;
-        nav_msgs::Path raw_path,fitten_path;
+        nav_msgs::Path raw_path_, fitten_path_;
 
+        // raw data list
+        std::vector<IMUData> imu_data_list;
+        std::vector<OdomData> odom_data_list;
+
+    public:
         IMUData get_imu_data();
         OdomData get_odom_data();
-        //publish func
+        // publish func
         void publish_odom();
         void publish_raw_path();
         void publish_fitten_path();
-        //init
+        void set_odom(Eigen::Vector3d pos, Eigen::Quaterniond orientation, Eigen::Vector3d linear_vel, Eigen::Vector3d angular_val, std::string frame_id, double time_stamp);
+        void add_path_point(Eigen::Vector3d pos, Eigen::Quaterniond orientation, std::string frame_id, double time_stamp);
+        void publish_msg();
+        // init
         void Init(int argc, char *argv[], std::string KNodeName);
         // get instance
         static INTERFACE &GetInterface()
