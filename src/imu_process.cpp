@@ -12,8 +12,6 @@ public:
     double curr_time = -1, last_time = -1;
     IMUData imu;
     OdomData odom;
-    Eigen::Matrix3d R_transform;
-    // 绕 z 轴转 - 90度 调整坐标系
 
     Eigen::Vector3d linear_vel;
     Eigen::Vector3d angular_vel;
@@ -35,8 +33,6 @@ public:
     void Init()
     {
         ROS_INFO("Init");
-        // 绕 z 轴转 - 90度 调整坐标系
-        R_transform << 0, -1, 0, 1, 0, 0, 0, 0, 1;
         odom = interface_ptr->get_odom_data();
         curr_time = odom.time_stamp;
         linear_vel = odom.linear_vel;
@@ -50,21 +46,21 @@ public:
     void Update()
     {
         // get data
-        while (odom.time_stamp < curr_time)
-            odom = interface_ptr->get_odom_data();
-
+        // while (odom.time_stamp < curr_time)
+        odom = interface_ptr->get_odom_data();
         // ROS_INFO("odom time stamp: %f", odom.time_stamp);
 
-        while (imu.time_stamp < odom.time_stamp)
-            imu = interface_ptr->get_imu_data();
-
+        // while (imu.time_stamp < odom.time_stamp)
+        imu = interface_ptr->get_imu_data();
         // ROS_INFO("imu time stamp: %f", imu.time_stamp);
 
+        // dt
         last_time = curr_time;
         curr_time = imu.time_stamp;
+        double dt = curr_time - last_time;
+
         angular_vel = imu.gyro;
         linear_vel = odom.linear_vel;
-        R = R_transform * imu.orientation;
         p += R * linear_vel * (curr_time - last_time);
 
         // publish odom
@@ -85,9 +81,7 @@ public:
         if (!is_init)
             Init();
         while (!is_exit) // 循环读取imu数据
-        {
             Update();
-        }
     }
 
     ~IMUProcess() { is_exit = true; }
