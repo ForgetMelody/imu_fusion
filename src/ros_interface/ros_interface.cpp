@@ -18,12 +18,12 @@ namespace imu_fusion
         nh_ptr_ = &nh;
         nh_local_ptr_ = &nh_local;
         // subscriber
-        imu_sub_ = nh.subscribe<sensor_msgs::Imu>("/IMU_data", 1000, boost::bind(&INTERFACE::imuCallback, this, _1));
-        odom_sub_ = nh.subscribe<nav_msgs::Odometry>("/odom", 1000, boost::bind(&INTERFACE::odomCallback, this, _1));
+        imu_sub_ = nh.subscribe<sensor_msgs::Imu>("/IMU_data", 100, boost::bind(&INTERFACE::imuCallback, this, _1));
+        odom_sub_ = nh.subscribe<nav_msgs::Odometry>("/odom", 100, boost::bind(&INTERFACE::odomCallback, this, _1));
         // publisher
-        raw_path_pub_ = nh.advertise<nav_msgs::Path>("/raw_path", 1000);
-        filtered_path_pub_ = nh.advertise<nav_msgs::Path>("/filtered_path", 1000);
-        odom_pub_ = nh.advertise<nav_msgs::Odometry>("/imu_odom", 1000);
+        raw_path_pub_ = nh.advertise<nav_msgs::Path>("/raw_path", 10);
+        filtered_path_pub_ = nh.advertise<nav_msgs::Path>("/filtered_path", 10);
+        odom_pub_ = nh.advertise<nav_msgs::Odometry>("/imu_odom", 10);
 
         is_initialized_ = true;
         // path msg init

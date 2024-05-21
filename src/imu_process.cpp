@@ -2,6 +2,7 @@
 #include "ros_interface/ros_interface.h"
 #include <thread>
 #include <eigen3/Eigen/Dense>
+#include "kalman_filter/kf.h"
 #include <ros/ros.h>
 using namespace imu_fusion;
 class IMUProcess
@@ -10,9 +11,10 @@ public:
     INTERFACE *interface_ptr;
     bool is_exit = false, is_init = false;
     double curr_time = -1, last_time = -1;
+
     IMUData imu;
     OdomData odom;
-
+    KalmanFilter kf;
     Eigen::Vector3d linear_vel;
     Eigen::Vector3d angular_vel;
     Eigen::Quaterniond R; // rotation
@@ -38,8 +40,11 @@ public:
         linear_vel = odom.linear_vel;
         angular_vel = odom.angular_vel;
         R = odom.orientation;
+        Vector3d rpy = R.toRotationMatrix().eulerAngles(0, 1, 2);
+        VectorXd state(6);
+        state << rpy.x(), rpy.y(), rpy.z(),angular_vel.x(), angular_vel.y(), angular_vel.z(); 
+        kf.init(state);
         p = odom.pos;
-
         is_init = true;
     }
 
@@ -49,7 +54,6 @@ public:
         // while (odom.time_stamp < curr_time)
         odom = interface_ptr->get_odom_data();
         // ROS_INFO("odom time stamp: %f", odom.time_stamp);
-
         // while (imu.time_stamp < odom.time_stamp)
         imu = interface_ptr->get_imu_data();
         // ROS_INFO("imu time stamp: %f", imu.time_stamp);
@@ -59,8 +63,18 @@ public:
         curr_time = imu.time_stamp;
         double dt = curr_time - last_time;
 
-        angular_vel = imu.gyro;
+        // kalman filter predict and update
+        kf.predict(dt);
+        Vector3d z_gyro(imu.gyro.x(), imu.gyro.y(), imu.gyro.z());
+        kf.update(z_gyro);
+
+        Quaterniond R((Eigen::AngleAxisd(kf.getState()[0], Eigen::Vector3d::UnitX()) *
+            Eigen::AngleAxisd(kf.getState()[1], Eigen::Vector3d::UnitY()) *
+            Eigen::AngleAxisd(kf.getState()[2], Eigen::Vector3d::UnitZ())).toRotationMatrix());
+         
         linear_vel = odom.linear_vel;
+        angular_vel = kf.getState().tail(3);
+        
         p += R * linear_vel * (curr_time - last_time);
 
         // publish odom
