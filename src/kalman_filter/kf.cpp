@@ -5,12 +5,13 @@
 using namespace std;
 using namespace Eigen;
 
-namespace imu_fusion {
+namespace imu_fusion
+{
 
-    KalmanFilter::KalmanFilter(double r,double q)
+    KalmanFilter::KalmanFilter(double r, double q)
     {
         State = VectorXd(6); // 状态向量
-        Z = VectorXd(3); // 测量值
+        Z = VectorXd(3);     // 测量值
 
         A = MatrixXd(6, 6);
         H = MatrixXd(3, 6); // measurement_dim , state_dim
@@ -41,10 +42,10 @@ namespace imu_fusion {
             0, r, 0,
             0, 0, r;
     }
-    void KalmanFilter::init(VectorXd state) {
+    void KalmanFilter::init(VectorXd state)
+    {
         State = state;
     }
-
 
     void KalmanFilter::predict(double dt)
     {
@@ -59,17 +60,17 @@ namespace imu_fusion {
     }
     void KalmanFilter::update(Vector3d z)
     {
-         Z << z(0), z(1), z(2);
+        Z << z(0), z(1), z(2);
 
-         // update kalman gain
-         K = Q * H.transpose() *(H*Q*H.transpose() + R).inverse();
-         // update state estimate
-         State = State + K * (Z - H * State);
-         // update covariance matrix
-         P = (MatrixXd::Identity(6, 6) - K * H) * P;
-         std::cout << "cov:\n" << P << std::endl;
+        // update kalman gain
+        K = Q * H.transpose() * (H * Q * H.transpose() + R).inverse();
+        // update state estimate
+        State = State + K * (Z - H * State);
+        // update covariance matrix
+        P = (MatrixXd::Identity(6, 6) - K * H) * P;
     }
-    Eigen::VectorXd KalmanFilter::getState() {
+    Eigen::VectorXd KalmanFilter::getState()
+    {
         return State;
     }
 }

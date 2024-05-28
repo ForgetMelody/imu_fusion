@@ -3,6 +3,8 @@
   <node pkg="imu_fusion" type="imu_node" name="imu_fusion_node" output="screen"/>
   <!-- play ros bag -->
   <node pkg="rosbag" type="play" name="rosbag_play" args="$(find imu_fusion)/bags/indoor_20240420.bag"/>
+  <!-- fast_lio path -->
+  <node pkg="imu_fusion" type="pub_path.py" name="pub_path_node" output="screen"/>
   <!-- rviz -->
   <node pkg="rviz" type="rviz" name="rviz1" args="-d $(find imu_fusion)/config/default.rviz"/>
 </launch>

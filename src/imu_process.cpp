@@ -19,6 +19,7 @@ public:
     Eigen::Vector3d angular_vel;
     Eigen::Quaterniond R; // rotation
     Eigen::Vector3d p;    // position
+    Eigen::Vector3d G_bias;
 
     IMUProcess(int argc, char **argv)
     {
@@ -36,13 +37,25 @@ public:
     {
         ROS_INFO("Init");
         odom = interface_ptr->get_odom_data();
+        imu = interface_ptr->get_imu_data();
         curr_time = odom.time_stamp;
         linear_vel = odom.linear_vel;
         angular_vel = odom.angular_vel;
         R = odom.orientation;
+        for (int i = 0; i < 50; i++)
+        {
+            // record bias of gyro
+            odom = interface_ptr->get_odom_data();
+            imu = interface_ptr->get_imu_data();
+            curr_time = odom.time_stamp;
+            G_bias += imu.gyro;
+        }
+        G_bias /= 50;
+        ROS_INFO("G_bias: %f %f %f", G_bias.x(), G_bias.y(), G_bias.z());
+
         Vector3d rpy = R.toRotationMatrix().eulerAngles(0, 1, 2);
         VectorXd state(6);
-        state << rpy.x(), rpy.y(), rpy.z(),angular_vel.x(), angular_vel.y(), angular_vel.z(); 
+        state << rpy.x(), rpy.y(), rpy.z(), angular_vel.x(), angular_vel.y(), angular_vel.z();
         kf.init(state);
         p = odom.pos;
         is_init = true;
@@ -65,16 +78,17 @@ public:
 
         // kalman filter predict and update
         kf.predict(dt);
-        Vector3d z_gyro(imu.gyro.x(), imu.gyro.y(), imu.gyro.z());
+        Vector3d z_gyro(imu.gyro.x() - G_bias.x(), imu.gyro.y() - G_bias.y(), imu.gyro.z() - G_bias.z());
         kf.update(z_gyro);
 
         Quaterniond R((Eigen::AngleAxisd(kf.getState()[0], Eigen::Vector3d::UnitX()) *
-            Eigen::AngleAxisd(kf.getState()[1], Eigen::Vector3d::UnitY()) *
-            Eigen::AngleAxisd(kf.getState()[2], Eigen::Vector3d::UnitZ())).toRotationMatrix());
-         
+                       Eigen::AngleAxisd(kf.getState()[1], Eigen::Vector3d::UnitY()) *
+                       Eigen::AngleAxisd(kf.getState()[2], Eigen::Vector3d::UnitZ()))
+                          .toRotationMatrix());
+
         linear_vel = odom.linear_vel;
         angular_vel = kf.getState().tail(3);
-        
+
         p += R * linear_vel * (curr_time - last_time);
 
         // publish odom

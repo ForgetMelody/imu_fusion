@@ -1,4 +1,4 @@
-#include <Eigen/Dense>
+#include <eigen3/Eigen/Dense>
 
 using namespace Eigen;
 
@@ -19,11 +19,10 @@ namespace imu_fusion
         MatrixXd K; // kalman gain matrix
 
     public:
-        KalmanFilter(double r=0.1,double q=0.01);
+        KalmanFilter(double r = 0.5, double q = 0.1);
         void init(VectorXd state);
         void predict(double dt);
         void update(Vector3d z);
         Eigen::VectorXd getState();
-        
     };
 }
