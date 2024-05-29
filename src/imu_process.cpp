@@ -1,8 +1,6 @@
-#include "geometry_msgs/PoseStamped.h"
 #include "ros_interface/ros_interface.h"
-#include <thread>
-#include <eigen3/Eigen/Dense>
 #include "kalman_filter/kf.h"
+#include <thread>
 #include <ros/ros.h>
 using namespace imu_fusion;
 class IMUProcess
@@ -12,13 +10,13 @@ public:
     bool is_exit = false, is_init = false;
     double curr_time = -1, last_time = -1;
 
-    IMUData imu;
-    OdomData odom;
-    KalmanFilter kf;
+    IMU imu;
+    Odom odom;
+    KalmanFilter *kf;
     Eigen::Vector3d linear_vel;
     Eigen::Vector3d angular_vel;
     Eigen::Quaterniond R; // rotation
-    Eigen::Vector3d p;    // position
+    Eigen::Vector3d P;    // position
     Eigen::Vector3d G_bias;
 
     IMUProcess(int argc, char **argv)
@@ -38,17 +36,18 @@ public:
         ROS_INFO("Init");
         odom = interface_ptr->get_odom_data();
         imu = interface_ptr->get_imu_data();
-        curr_time = odom.time_stamp;
-        linear_vel = odom.linear_vel;
-        angular_vel = odom.angular_vel;
-        R = odom.orientation;
+        curr_time = odom.t_;
+        linear_vel = odom.linear_;
+        angular_vel = odom.angular_;
+        R = Eigen::Quaterniond::Identity();
+
         for (int i = 0; i < 50; i++)
         {
             // record bias of gyro
             odom = interface_ptr->get_odom_data();
             imu = interface_ptr->get_imu_data();
-            curr_time = odom.time_stamp;
-            G_bias += imu.gyro;
+            curr_time = odom.t_;
+            G_bias += imu.gyro_;
         }
         G_bias /= 50;
         ROS_INFO("G_bias: %f %f %f", G_bias.x(), G_bias.y(), G_bias.z());
@@ -56,8 +55,9 @@ public:
         Vector3d rpy = R.toRotationMatrix().eulerAngles(0, 1, 2);
         VectorXd state(6);
         state << rpy.x(), rpy.y(), rpy.z(), angular_vel.x(), angular_vel.y(), angular_vel.z();
-        kf.init(state);
-        p = odom.pos;
+        kf = new KalmanFilter(interface_ptr->kf_r, interface_ptr->kf_q);
+        kf->init(state);
+        P = odom.pos_;
         is_init = true;
     }
 
@@ -73,28 +73,29 @@ public:
 
         // dt
         last_time = curr_time;
-        curr_time = imu.time_stamp;
+        curr_time = imu.t_;
         double dt = curr_time - last_time;
 
         // kalman filter predict and update
-        kf.predict(dt);
-        Vector3d z_gyro(imu.gyro.x() - G_bias.x(), imu.gyro.y() - G_bias.y(), imu.gyro.z() - G_bias.z());
-        kf.update(z_gyro);
+        kf->predict(dt);
+        Vector3d z_gyro(imu.gyro_.x() - G_bias.x(), imu.gyro_.y() - G_bias.y(), imu.gyro_.z() - G_bias.z());
+        kf->update(z_gyro);
 
-        Quaterniond R((Eigen::AngleAxisd(kf.getState()[0], Eigen::Vector3d::UnitX()) *
-                       Eigen::AngleAxisd(kf.getState()[1], Eigen::Vector3d::UnitY()) *
-                       Eigen::AngleAxisd(kf.getState()[2], Eigen::Vector3d::UnitZ()))
+        Quaterniond R((Eigen::AngleAxisd(kf->getState()[0], Eigen::Vector3d::UnitX()) *
+                       Eigen::AngleAxisd(kf->getState()[1], Eigen::Vector3d::UnitY()) *
+                       Eigen::AngleAxisd(kf->getState()[2], Eigen::Vector3d::UnitZ()))
                           .toRotationMatrix());
 
-        linear_vel = odom.linear_vel;
-        angular_vel = kf.getState().tail(3);
+        linear_vel = odom.linear_;
+        angular_vel = kf->getState().tail(3);
+        printf("linear_vel: \t%f \t%f \t%f angular_vel: \t%f \t%f \t%f\n", linear_vel.x(), linear_vel.y(), linear_vel.z(), angular_vel.x(), angular_vel.y(), angular_vel.z());
 
-        p += R * linear_vel * (curr_time - last_time);
+        P += R * linear_vel * (curr_time - last_time);
 
         // publish odom
-        interface_ptr->set_odom(p, R, linear_vel, angular_vel, "odom", curr_time);
+        interface_ptr->set_odom(P, R, linear_vel, angular_vel, "odom", curr_time);
         // path
-        interface_ptr->add_path_point(p, R, "odom", curr_time);
+        interface_ptr->add_path_point(P, R, "odom", curr_time);
         // publish path
         interface_ptr->publish_msg();
         // ROS_INFO("odom time stamp: %f", odom.time_stamp);

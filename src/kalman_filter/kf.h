@@ -1,3 +1,5 @@
+#ifndef KF_H
+#define KF_H
 #include <eigen3/Eigen/Dense>
 
 using namespace Eigen;
@@ -19,6 +21,7 @@ namespace imu_fusion
         MatrixXd K; // kalman gain matrix
 
     public:
+        KalmanFilter() = default;
         KalmanFilter(double r = 0.5, double q = 0.1);
         void init(VectorXd state);
         void predict(double dt);
@@ -26,3 +29,5 @@ namespace imu_fusion
         Eigen::VectorXd getState();
     };
 }
+
+#endif // KF_H
